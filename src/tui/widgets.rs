@@ -213,13 +213,11 @@ fn render_messages(f: &mut Frame, area: Rect, app: &App) {
         )));
     }
 
-    // Count actual visual rows after wrapping (use display width, not byte length)
-    let total_visual_rows: usize = lines.iter().map(|line| {
-        let display_width: usize = line.spans.iter()
-            .map(|s| s.content.chars().count())
-            .sum();
-        if width == 0 { 1 } else { (display_width / width.max(1)) + 1 }
-    }).sum();
+    // Pre-wrap lines at character boundaries so our row count is exact.
+    // (Ratatui's word-wrap can use more rows than a simple char-count estimate,
+    // causing the auto-scroll to undershoot and cut off bottom content.)
+    let lines = wrap_lines_to_width(lines, width);
+    let total_visual_rows = lines.len();
 
     let visible_height = area.height as usize;
 
@@ -231,7 +229,6 @@ fn render_messages(f: &mut Frame, area: Rect, app: &App) {
 
     let paragraph = Paragraph::new(lines)
         .block(Block::default().style(Style::default()))
-        .wrap(Wrap { trim: false })
         .scroll((scroll as u16, 0));
 
     f.render_widget(paragraph, area);
@@ -354,6 +351,62 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
     let paragraph = Paragraph::new(line);
 
     f.render_widget(paragraph, area);
+}
+
+/// Split lines that exceed `width` into multiple lines, preserving styles.
+/// Each output line fits within the terminal width, giving an exact row count.
+fn wrap_lines_to_width(lines: Vec<Line<'static>>, width: usize) -> Vec<Line<'static>> {
+    if width == 0 {
+        return lines;
+    }
+    let mut out = Vec::with_capacity(lines.len());
+    for line in lines {
+        let char_count: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
+        if char_count <= width {
+            out.push(line);
+        } else if line.spans.len() == 1 {
+            // Fast path: single span — split at character boundaries
+            let span = &line.spans[0];
+            let style = span.style;
+            let chars: Vec<char> = span.content.chars().collect();
+            for chunk in chars.chunks(width) {
+                let s: String = chunk.iter().collect();
+                out.push(Line::from(Span::styled(s, style)));
+            }
+        } else {
+            // Multi-span: collect all chars with styles, then chunk
+            let styled_chars: Vec<(char, Style)> = line
+                .spans
+                .iter()
+                .flat_map(|s| s.content.chars().map(move |c| (c, s.style)))
+                .collect();
+            for chunk in styled_chars.chunks(width) {
+                let spans: Vec<Span> = chunk_to_spans(chunk);
+                out.push(Line::from(spans));
+            }
+        }
+    }
+    out
+}
+
+/// Group consecutive chars with the same style into Spans.
+fn chunk_to_spans(chars: &[(char, Style)]) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut buf = String::new();
+    let mut cur_style = chars[0].1;
+    for &(c, style) in chars {
+        if style == cur_style {
+            buf.push(c);
+        } else {
+            spans.push(Span::styled(std::mem::take(&mut buf), cur_style));
+            cur_style = style;
+            buf.push(c);
+        }
+    }
+    if !buf.is_empty() {
+        spans.push(Span::styled(buf, cur_style));
+    }
+    spans
 }
 
 fn dirs_home(path: &std::path::Path) -> String {

@@ -2,7 +2,7 @@ pub mod widgets;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, EnableBracketedPaste, DisableBracketedPaste, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, EnableBracketedPaste, DisableBracketedPaste, EnableMouseCapture, DisableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
@@ -141,7 +141,7 @@ impl App {
                 self.messages.push(UiMessage::Info("  /help          — show this help".into()));
                 self.messages.push(UiMessage::Info("  /exit          — quit".into()));
                 self.messages.push(UiMessage::Info("".into()));
-                self.messages.push(UiMessage::Info("Scrolling: Shift+Up/Down (3 lines), PageUp/PageDown".into()));
+                self.messages.push(UiMessage::Info("Scrolling: mouse wheel, PageUp/PageDown, Shift+Up/Down".into()));
                 None
             }
             _ => {
@@ -178,6 +178,7 @@ pub async fn run_tui() -> Result<()> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     stdout().execute(EnableBracketedPaste)?;
+    stdout().execute(EnableMouseCapture)?;
     let term_backend = CrosstermBackend::new(stdout());
     let mut terminal = Terminal::new(term_backend)?;
     terminal.clear()?;
@@ -191,6 +192,7 @@ pub async fn run_tui() -> Result<()> {
     app.settings.save();
 
     // Restore terminal
+    stdout().execute(DisableMouseCapture)?;
     stdout().execute(DisableBracketedPaste)?;
     disable_raw_mode()?;
     stdout().execute(LeaveAlternateScreen)?;
@@ -225,10 +227,21 @@ async fn run_event_loop(
                     app.cursor_pos += clean.len();
                     app.show_splash = false;
                 }
-                continue;
             }
 
-            if let Event::Key(key) = ev {
+            if let Event::Mouse(mouse) = &ev {
+                match mouse.kind {
+                    MouseEventKind::ScrollUp => {
+                        app.scroll_offset = app.scroll_offset.saturating_add(3);
+                        app.user_scrolled = app.scroll_offset > 0;
+                    }
+                    MouseEventKind::ScrollDown => {
+                        app.scroll_offset = app.scroll_offset.saturating_sub(3);
+                        app.user_scrolled = app.scroll_offset > 0;
+                    }
+                    _ => {}
+                }
+            } else if let Event::Key(key) = ev {
                 if app.show_splash {
                     app.show_splash = false;
                     continue;
