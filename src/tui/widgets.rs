@@ -39,34 +39,118 @@ pub fn render(f: &mut Frame, app: &App) {
 }
 
 fn render_splash(f: &mut Frame, area: Rect) {
-    let dim = Style::default().fg(Color::DarkGray);
-    let cyan = Style::default().fg(Color::Cyan);
-    let bold_cyan = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
-    let bold_white = Style::default().fg(Color::White).add_modifier(Modifier::BOLD);
-    let gray = Style::default().fg(Color::Gray);
+    // Color palette from the logo HTML
+    let gold = Color::Rgb(232, 184, 109);
+    let green = Color::Rgb(62, 140, 110);
+    let cream = Color::Rgb(240, 236, 227);
+    let dim_purple = Color::Rgb(90, 90, 110);
+    let dark = Color::Rgb(42, 42, 56);
 
-    let splash = vec![
-        Line::from(""),
-        Line::from(Span::styled(r"     /\  ", cyan)),
-        Line::from(Span::styled(r"    /  | ", cyan)),
-        Line::from(Span::styled(r"   / /| |", cyan)),
-        Line::from(Span::styled(r"  /_/_|_/", cyan)),
-        Line::from(""),
-        Line::from(Span::styled("  AIRPLANE CODER", bold_cyan)),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  your code. your machine. no cloud required.",
-            gray,
-        )),
-        Line::from(""),
-        Line::from(Span::styled("  type anything to start hacking", bold_white)),
-        Line::from(Span::styled(
-            "  /model to switch brains   /help for more   esc to bail",
-            dim,
-        )),
+    let s_gold = Style::default().fg(gold);
+    let s_gold_bold = Style::default().fg(gold).add_modifier(Modifier::BOLD);
+    let s_cream_bold = Style::default().fg(cream).add_modifier(Modifier::BOLD);
+    let s_green = Style::default().fg(green);
+    let s_dim = Style::default().fg(dim_purple);
+    let s_dark = Style::default().fg(dark);
+
+    // Geometric airplane using half-block characters
+    // ▀▄█▐▌ give us 2x vertical resolution
+    let plane_lines: Vec<Line> = vec![
+        Line::from(vec![
+            Span::styled("          ·  · ·", s_dark),
+            Span::styled("▄▄", s_gold),
+        ]),
+        Line::from(vec![
+            Span::styled("       · ·", s_dark),
+            Span::styled("▄▄▄██████████▀▀", s_gold),
+        ]),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled("<", s_green),
+            Span::styled(" ▄▄████", s_gold),
+            Span::styled("▀▀▀▀▀▀▀▀▀", s_gold_bold),
+            Span::styled("▀▀▀▀▀  ▀▀", s_gold),
+        ]),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled("/>", s_green),
+            Span::styled(" ▀▀████", s_gold),
+            Span::styled("▄▄▄▄▄▄▄▄▄", s_gold_bold),
+            Span::styled("▄▄▄▄▄  ▄▄", s_gold),
+        ]),
+        Line::from(vec![
+            Span::styled("       · ·", s_dark),
+            Span::styled("▀▀▀██████████▄▄", s_gold),
+        ]),
+        Line::from(vec![
+            Span::styled("          ·  · ·", s_dark),
+            Span::styled("▀▀", s_gold),
+        ]),
     ];
 
-    let paragraph = Paragraph::new(splash);
+    // Center everything vertically
+    let content_height = 18; // total lines of content
+    let v_pad = area.height.saturating_sub(content_height) / 3; // upper third
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    // Vertical padding
+    for _ in 0..v_pad {
+        lines.push(Line::from(""));
+    }
+
+    // Badge
+    lines.push(Line::from(Span::styled(
+        "           // indie build · v0.1.0",
+        s_dim,
+    )));
+    lines.push(Line::from(""));
+
+    // Airplane
+    for pl in plane_lines {
+        lines.push(pl);
+    }
+    lines.push(Line::from(""));
+
+    // Title
+    lines.push(Line::from(vec![
+        Span::styled("           A I R P L A N E", s_cream_bold),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("           C O D E R", s_gold_bold),
+    ]));
+
+    // Divider
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("           ", Style::default()),
+        Span::styled("─", s_dark),
+        Span::styled("──", Style::default().fg(dim_purple)),
+        Span::styled("────", s_gold),
+        Span::styled("──", Style::default().fg(dim_purple)),
+        Span::styled("─", s_dark),
+    ]));
+
+    // Tagline
+    lines.push(Line::from(vec![
+        Span::styled("           ", Style::default()),
+        Span::styled("/* ", s_green),
+        Span::styled("ship code from anywhere", s_dim),
+        Span::styled(" */", s_green),
+    ]));
+    lines.push(Line::from(""));
+
+    // Help hints
+    lines.push(Line::from(Span::styled(
+        "           type anything to start",
+        s_cream_bold,
+    )));
+    lines.push(Line::from(Span::styled(
+        "           /model · /help · esc",
+        s_dim,
+    )));
+
+    let paragraph = Paragraph::new(lines);
     f.render_widget(paragraph, area);
 }
 
@@ -93,7 +177,7 @@ fn render_messages(f: &mut Frame, area: Rect, app: &App) {
             UiMessage::ToolCall(desc) => {
                 lines.push(Line::from(Span::styled(
                     format!("  > {desc}"),
-                    Style::default().fg(Color::Cyan),
+                    Style::default().fg(Color::Rgb(200, 160, 90)),
                 )));
             }
             UiMessage::ToolResult(result) => {
@@ -124,24 +208,29 @@ fn render_messages(f: &mut Frame, area: Rect, app: &App) {
         lines.push(Line::from(Span::styled(
             "  thinking...",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Rgb(232, 184, 109))
                 .add_modifier(Modifier::DIM),
         )));
     }
 
-    // Count actual visual rows after wrapping
+    // Count actual visual rows after wrapping (use display width, not byte length)
     let total_visual_rows: usize = lines.iter().map(|line| {
-        let line_len: usize = line.spans.iter().map(|s| s.content.len()).sum();
-        if width == 0 { 1 } else { ((line_len.max(1) - 1) / width) + 1 }
+        let display_width: usize = line.spans.iter()
+            .map(|s| s.content.chars().count())
+            .sum();
+        if width == 0 { 1 } else { (display_width / width.max(1)) + 1 }
     }).sum();
 
     let visible_height = area.height as usize;
 
     // Scroll: show the bottom unless user scrolled up
     let max_scroll = total_visual_rows.saturating_sub(visible_height);
-    let scroll = max_scroll.saturating_sub(app.scroll_offset);
+    // Clamp scroll_offset to valid range
+    let clamped_offset = app.scroll_offset.min(max_scroll);
+    let scroll = max_scroll.saturating_sub(clamped_offset);
 
     let paragraph = Paragraph::new(lines)
+        .block(Block::default().style(Style::default()))
         .wrap(Wrap { trim: false })
         .scroll((scroll as u16, 0));
 
@@ -177,7 +266,7 @@ fn render_input(f: &mut Frame, area: Rect, app: &App, total_lines: usize, visibl
                 .border_style(Style::default().fg(if app.is_processing {
                     Color::DarkGray
                 } else {
-                    Color::Cyan
+                    Color::Rgb(160, 130, 70)
                 })),
         )
         .style(Style::default().fg(if app.is_processing {
@@ -201,31 +290,34 @@ fn render_input(f: &mut Frame, area: Rect, app: &App, total_lines: usize, visibl
 }
 
 fn render_context_bar(f: &mut Frame, area: Rect, app: &App) {
-    let content = if app.is_processing {
+    let gold = Color::Rgb(232, 184, 109);
+    let muted_gold = Color::Rgb(200, 160, 90);
+
+    let line = if app.is_processing {
         let elapsed = app.turn_start
             .map(|s| format!("{:.1}s", s.elapsed().as_secs_f64()))
             .unwrap_or_default();
         let tool_info = app.last_tool
             .as_deref()
-            .map(|t| format!(" | last: {t}"))
+            .map(|t| format!(" | {t}"))
             .unwrap_or_default();
-        format!(
-            " ⏳ working… iter {}/20{} | {}",
-            app.iteration_count, tool_info, elapsed
-        )
+        Line::from(vec![
+            Span::styled(" ● ", Style::default().fg(gold).add_modifier(Modifier::SLOW_BLINK)),
+            Span::styled(
+                format!("iter {}/20{} | {}", app.iteration_count, tool_info, elapsed),
+                Style::default().fg(muted_gold),
+            ),
+        ])
     } else if !app.context_line.is_empty() {
-        format!(" {}", app.context_line)
+        Line::from(Span::styled(
+            format!(" {}", app.context_line),
+            Style::default().fg(muted_gold),
+        ))
     } else {
-        " Ready".to_string()
+        Line::from(Span::styled(" Ready", Style::default().fg(muted_gold)))
     };
 
-    let paragraph = Paragraph::new(Line::from(Span::styled(
-        content,
-        Style::default()
-            .fg(Color::Cyan)
-            .bg(Color::Black),
-    )))
-    .style(Style::default().bg(Color::Black));
+    let paragraph = Paragraph::new(line);
 
     f.render_widget(paragraph, area);
 }
@@ -235,31 +327,31 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
         .map(|p| dirs_home(&p))
         .unwrap_or_else(|_| "?".to_string());
 
-    let bg = Style::default().fg(Color::White).bg(Color::DarkGray);
+    let bar_fg = Color::Rgb(180, 150, 100);
+    let fg = Style::default().fg(bar_fg);
 
     let left = format!(" {} | {}", app.model, cwd);
 
     // Network indicator: green <3s, yellow 3-10s, red >10s
     let (dot, dot_color, label) = match app.last_latency_ms {
         Some(ms) if ms < 3000 => ("●", Color::Green, format!("{:.1}s", ms as f64 / 1000.0)),
-        Some(ms) if ms < 10000 => ("●", Color::Yellow, format!("{:.1}s", ms as f64 / 1000.0)),
+        Some(ms) if ms < 10000 => ("●", Color::Rgb(232, 184, 109), format!("{:.1}s", ms as f64 / 1000.0)),
         Some(ms) => ("●", Color::Red, format!("{:.1}s", ms as f64 / 1000.0)),
-        None => ("○", Color::DarkGray, "—".to_string()),
+        None => ("○", Color::Rgb(60, 55, 45), "—".to_string()),
     };
 
     let right = format!("{} {} ", label, dot);
     let pad = (area.width as usize).saturating_sub(left.len() + right.len() - dot.len() + 1);
 
     let line = Line::from(vec![
-        Span::styled(left, bg),
-        Span::styled(" ".repeat(pad), Style::default().bg(Color::DarkGray)),
-        Span::styled(label + " ", Style::default().fg(Color::DarkGray).bg(Color::DarkGray)),
-        Span::styled(dot, Style::default().fg(dot_color).bg(Color::DarkGray)),
-        Span::styled(" ", Style::default().bg(Color::DarkGray)),
+        Span::styled(left, fg),
+        Span::styled(" ".repeat(pad), Style::default()),
+        Span::styled(label + " ", Style::default().fg(Color::Rgb(90, 80, 60))),
+        Span::styled(dot, Style::default().fg(dot_color)),
+        Span::styled(" ", Style::default()),
     ]);
 
-    let paragraph = Paragraph::new(line)
-        .style(Style::default().bg(Color::DarkGray));
+    let paragraph = Paragraph::new(line);
 
     f.render_widget(paragraph, area);
 }

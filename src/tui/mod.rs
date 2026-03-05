@@ -180,6 +180,7 @@ pub async fn run_tui() -> Result<()> {
     stdout().execute(EnableBracketedPaste)?;
     let term_backend = CrosstermBackend::new(stdout());
     let mut terminal = Terminal::new(term_backend)?;
+    terminal.clear()?;
 
     let (agent_tx, mut agent_rx) = mpsc::unbounded_channel::<AgentEvent>();
 
