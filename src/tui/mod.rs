@@ -41,6 +41,7 @@ pub struct App {
     pub turn_start: Option<std::time::Instant>,
     pub settings: Settings,
     pub last_latency_ms: Option<u64>,
+    pub user_scrolled: bool,
 }
 
 impl App {
@@ -61,6 +62,7 @@ impl App {
             turn_start: None,
             settings,
             last_latency_ms: None,
+            user_scrolled: false,
         }
     }
 
@@ -278,6 +280,7 @@ async fn run_event_loop(
                         ..
                     } => {
                         app.scroll_offset = app.scroll_offset.saturating_add(3);
+                        app.user_scrolled = app.scroll_offset > 0;
                     }
                     // Scroll: Shift+Down
                     KeyEvent {
@@ -286,6 +289,7 @@ async fn run_event_loop(
                         ..
                     } => {
                         app.scroll_offset = app.scroll_offset.saturating_sub(3);
+                        app.user_scrolled = app.scroll_offset > 0;
                     }
                     // PageUp
                     KeyEvent {
@@ -294,6 +298,7 @@ async fn run_event_loop(
                     } => {
                         let page = terminal.size()?.height.saturating_sub(4) as usize;
                         app.scroll_offset = app.scroll_offset.saturating_add(page);
+                        app.user_scrolled = app.scroll_offset > 0;
                     }
                     // PageDown
                     KeyEvent {
@@ -302,6 +307,7 @@ async fn run_event_loop(
                     } => {
                         let page = terminal.size()?.height.saturating_sub(4) as usize;
                         app.scroll_offset = app.scroll_offset.saturating_sub(page);
+                        app.user_scrolled = app.scroll_offset > 0;
                     }
                     // Enter: submit input
                     KeyEvent {
@@ -313,6 +319,7 @@ async fn run_event_loop(
                             app.input.clear();
                             app.cursor_pos = 0;
                             app.scroll_offset = 0;
+                            app.user_scrolled = false;
 
                             if input.starts_with('/') {
                                 app.handle_slash_command(&input);
@@ -416,7 +423,7 @@ async fn run_event_loop(
             match event {
                 AgentEvent::AssistantText(text) => {
                     app.messages.push(UiMessage::Assistant(text));
-                    app.scroll_offset = 0;
+                    if !app.user_scrolled { app.scroll_offset = 0; }
                 }
                 AgentEvent::ToolCall(desc) => {
                     app.iteration_count += 1;
@@ -424,7 +431,7 @@ async fn run_event_loop(
                     let tool_name = desc.split('(').next().unwrap_or(&desc).trim().to_string();
                     app.last_tool = Some(tool_name);
                     app.messages.push(UiMessage::ToolCall(desc));
-                    app.scroll_offset = 0;
+                    if !app.user_scrolled { app.scroll_offset = 0; }
                 }
                 AgentEvent::ToolResult(result) => {
                     // Truncate for display
@@ -434,7 +441,7 @@ async fn run_event_loop(
                         result
                     };
                     app.messages.push(UiMessage::ToolResult(display));
-                    app.scroll_offset = 0;
+                    if !app.user_scrolled { app.scroll_offset = 0; }
                 }
                 AgentEvent::Done => {
                     app.is_processing = false;
