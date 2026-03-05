@@ -77,10 +77,13 @@ Default: `qwen3.5:4b`. Override with `AIRPLANE_MODEL` env var.
 
 | Model | Size | Use Case |
 |-------|------|----------|
-| `qwen3.5:0.8b` | ~0.5GB | Tiny, fast, testing |
-| `qwen3.5:2b` | ~1.5GB | Lightweight |
-| `qwen3.5:4b` | ~2.5GB | Good balance (default) |
-| `qwen3.5:8b` | ~5GB | Best quality |
+| `qwen3.5:0.8b` | ~1GB | Tiny, fast, testing |
+| `qwen3.5:2b` | ~2.7GB | Lightweight |
+| `qwen3.5:4b` | ~3.4GB | Good balance (default) |
+| `qwen3.5:9b` | ~6.6GB | Best local quality |
+| `gemma3:12b` | ~8GB | Google's strong coder |
+| `claude-opus-4-6` | cloud | Best quality (API) |
+| `claude-sonnet-4-6` | cloud | Fast + capable (API) |
 
 ## Code Practices
 

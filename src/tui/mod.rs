@@ -73,7 +73,7 @@ impl App {
                 } else {
                     self.messages.push(UiMessage::Info(format!("Current model: {}", self.model)));
                     self.messages.push(UiMessage::Info(
-                        "Local: qwen3.5:0.8b, qwen3.5:2b, qwen3.5:4b, qwen3.5:8b".into(),
+                        "Local: qwen3.5:0.8b, qwen3.5:2b, qwen3.5:4b, qwen3.5:9b, gemma3:12b".into(),
                     ));
                     self.messages.push(UiMessage::Info(
                         "Cloud: claude-opus-4-6, claude-sonnet-4-6".into(),
@@ -145,6 +145,7 @@ async fn run_event_loop(
     agent_rx: &mut mpsc::UnboundedReceiver<AgentEvent>,
 ) -> Result<()> {
     let mut agent_handle: Option<tokio::task::JoinHandle<()>> = None;
+    let mut last_esc: Option<std::time::Instant> = None;
 
     loop {
         // Draw
@@ -173,6 +174,29 @@ async fn run_event_loop(
                             app.messages.push(UiMessage::System("Cancelled.".into()));
                         } else {
                             app.should_quit = true;
+                        }
+                    }
+                    // Esc: cancel agent (single tap), quit (double tap when idle)
+                    KeyEvent {
+                        code: KeyCode::Esc,
+                        ..
+                    } => {
+                        if app.is_processing {
+                            // Single Esc cancels the agent
+                            if let Some(handle) = agent_handle.take() {
+                                handle.abort();
+                            }
+                            app.is_processing = false;
+                            app.messages.push(UiMessage::System("Cancelled.".into()));
+                        } else {
+                            // Double-tap Esc to quit when idle (within 500ms)
+                            let now = std::time::Instant::now();
+                            if let Some(prev) = last_esc {
+                                if now.duration_since(prev).as_millis() < 500 {
+                                    app.should_quit = true;
+                                }
+                            }
+                            last_esc = Some(now);
                         }
                     }
                     // Scroll: Shift+Up
