@@ -28,32 +28,30 @@ pub fn render(f: &mut Frame, app: &App) {
 }
 
 fn render_splash(f: &mut Frame, area: Rect) {
+    let dim = Style::default().fg(Color::DarkGray);
+    let cyan = Style::default().fg(Color::Cyan);
+    let bold_cyan = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+    let bold_white = Style::default().fg(Color::White).add_modifier(Modifier::BOLD);
+    let gray = Style::default().fg(Color::Gray);
+
     let splash = vec![
         Line::from(""),
+        Line::from(Span::styled(r"     /\  ", cyan)),
+        Line::from(Span::styled(r"    /  | ", cyan)),
+        Line::from(Span::styled(r"   / /| |", cyan)),
+        Line::from(Span::styled(r"  /_/_|_/", cyan)),
+        Line::from(""),
+        Line::from(Span::styled("  AIRPLANE CODER", bold_cyan)),
         Line::from(""),
         Line::from(Span::styled(
-            "  AIRPLANE CODER",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
+            "  your code. your machine. no cloud required.",
+            gray,
         )),
         Line::from(""),
+        Line::from(Span::styled("  type anything to start hacking", bold_white)),
         Line::from(Span::styled(
-            "  Local coding agent — fully offline",
-            Style::default().fg(Color::Gray),
-        )),
-        Line::from(Span::styled(
-            "  Powered by Qwen via Ollama",
-            Style::default().fg(Color::Gray),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Type a task to get started.",
-            Style::default().fg(Color::White),
-        )),
-        Line::from(Span::styled(
-            "  /model to switch models, /help for commands.",
-            Style::default().fg(Color::DarkGray),
+            "  /model to switch brains   /help for more   esc to bail",
+            dim,
         )),
     ];
 
