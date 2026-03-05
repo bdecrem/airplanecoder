@@ -1,0 +1,3 @@
+- what programming language?
+- must be able to switch between the 3 qwen models with /models 
+- must be able to improve itself eg launch a version of itself in bash somehow so it can work on features for itself

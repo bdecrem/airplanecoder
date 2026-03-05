@@ -2,7 +2,7 @@ pub mod widgets;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, EnableBracketedPaste, DisableBracketedPaste, Event, KeyCode, KeyEvent, KeyModifiers},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 
 use airplane::agent::{self, AgentEvent, LlmBackend};
 use airplane::anthropic;
+use airplane::settings::Settings;
 use airplane::types::*;
 
 #[derive(Debug, Clone)]
@@ -34,10 +35,15 @@ pub struct App {
     pub should_quit: bool,
     pub agent_messages: Vec<Message>,
     pub show_splash: bool,
+    pub context_line: String,
+    pub iteration_count: usize,
+    pub last_tool: Option<String>,
+    pub turn_start: Option<std::time::Instant>,
+    pub settings: Settings,
 }
 
 impl App {
-    pub fn new(model: String) -> Self {
+    pub fn new(model: String, settings: Settings) -> Self {
         Self {
             messages: Vec::new(),
             input: String::new(),
@@ -48,6 +54,11 @@ impl App {
             should_quit: false,
             agent_messages: Vec::new(),
             show_splash: true,
+            context_line: String::new(),
+            iteration_count: 0,
+            last_tool: None,
+            turn_start: None,
+            settings,
         }
     }
 
@@ -76,7 +87,44 @@ impl App {
                         "Local: qwen3.5:0.8b, qwen3.5:2b, qwen3.5:4b, qwen3.5:9b, gemma3:12b".into(),
                     ));
                     self.messages.push(UiMessage::Info(
-                        "Cloud: claude-opus-4-6, claude-sonnet-4-6".into(),
+                        "Cloud: claude-opus-4-6, claude-sonnet-4-6, sonnet-fast".into(),
+                    ));
+                }
+                None
+            }
+            "/settings" => {
+                use airplane::settings::ResumeModel;
+                if parts.len() > 1 {
+                    match parts[1].trim() {
+                        "resume last" | "resume last-used" => {
+                            self.settings.resume_model = ResumeModel::LastUsed;
+                            self.settings.save();
+                            self.messages.push(UiMessage::System(
+                                "Resume: will start with last-used model.".into(),
+                            ));
+                        }
+                        "resume default" => {
+                            self.settings.resume_model = ResumeModel::Default;
+                            self.settings.save();
+                            self.messages.push(UiMessage::System(
+                                "Resume: will start with default model.".into(),
+                            ));
+                        }
+                        _ => {
+                            self.messages.push(UiMessage::System(
+                                "Unknown setting. Try: /settings resume last  or  /settings resume default".into(),
+                            ));
+                        }
+                    }
+                } else {
+                    self.messages.push(UiMessage::Info("Settings:".into()));
+                    self.messages.push(UiMessage::Info(format!(
+                        "  resume: {}",
+                        self.settings.resume_model
+                    )));
+                    self.messages.push(UiMessage::Info("".into()));
+                    self.messages.push(UiMessage::Info(
+                        "Change with: /settings resume last  or  /settings resume default".into(),
                     ));
                 }
                 None
@@ -84,6 +132,7 @@ impl App {
             "/help" => {
                 self.messages.push(UiMessage::Info("Commands:".into()));
                 self.messages.push(UiMessage::Info("  /model [name]  — show or switch model".into()));
+                self.messages.push(UiMessage::Info("  /settings      — view or change settings".into()));
                 self.messages.push(UiMessage::Info("  /clear         — reset conversation".into()));
                 self.messages.push(UiMessage::Info("  /help          — show this help".into()));
                 self.messages.push(UiMessage::Info("  /exit          — quit".into()));
@@ -102,8 +151,9 @@ impl App {
 enum SlashAction {}
 
 pub async fn run_tui() -> Result<()> {
-    let model = std::env::var("AIRPLANE_MODEL").unwrap_or_else(|_| "qwen3.5:4b".to_string());
-    let mut app = App::new(model.clone());
+    let settings = Settings::load();
+    let model = settings.startup_model();
+    let mut app = App::new(model.clone(), settings);
 
     let backend = LlmBackend::new();
 
@@ -123,6 +173,7 @@ pub async fn run_tui() -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
+    stdout().execute(EnableBracketedPaste)?;
     let term_backend = CrosstermBackend::new(stdout());
     let mut terminal = Terminal::new(term_backend)?;
 
@@ -130,7 +181,12 @@ pub async fn run_tui() -> Result<()> {
 
     let result = run_event_loop(&mut terminal, &mut app, &backend, &agent_tx, &mut agent_rx).await;
 
+    // Save last-used model
+    app.settings.last_model = Some(app.model.clone());
+    app.settings.save();
+
     // Restore terminal
+    stdout().execute(DisableBracketedPaste)?;
     disable_raw_mode()?;
     stdout().execute(LeaveAlternateScreen)?;
 
@@ -153,7 +209,21 @@ async fn run_event_loop(
 
         // Poll for crossterm events (50ms timeout)
         if event::poll(std::time::Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
+            let ev = event::read()?;
+
+            // Handle pasted text (bracketed paste mode)
+            if let Event::Paste(text) = &ev {
+                if !app.is_processing {
+                    // Replace newlines with spaces, insert at cursor
+                    let clean: String = text.chars().map(|c| if c == '\n' || c == '\r' { ' ' } else { c }).collect();
+                    app.input.insert_str(app.cursor_pos, &clean);
+                    app.cursor_pos += clean.len();
+                    app.show_splash = false;
+                }
+                continue;
+            }
+
+            if let Event::Key(key) = ev {
                 if app.show_splash {
                     app.show_splash = false;
                     continue;
@@ -248,6 +318,10 @@ async fn run_event_loop(
                                 app.show_splash = false;
                                 app.messages.push(UiMessage::User(input.clone()));
                                 app.is_processing = true;
+                                app.iteration_count = 0;
+                                app.last_tool = None;
+                                app.turn_start = Some(std::time::Instant::now());
+                                app.context_line.clear();
 
                                 // Add user message to agent conversation
                                 app.agent_messages.push(Message {
@@ -343,6 +417,10 @@ async fn run_event_loop(
                     app.scroll_offset = 0;
                 }
                 AgentEvent::ToolCall(desc) => {
+                    app.iteration_count += 1;
+                    // Extract tool name from desc (format: "tool_name({...})")
+                    let tool_name = desc.split('(').next().unwrap_or(&desc).trim().to_string();
+                    app.last_tool = Some(tool_name);
                     app.messages.push(UiMessage::ToolCall(desc));
                     app.scroll_offset = 0;
                 }
@@ -358,10 +436,20 @@ async fn run_event_loop(
                 }
                 AgentEvent::Done => {
                     app.is_processing = false;
+                    if let Some(start) = app.turn_start.take() {
+                        let elapsed = start.elapsed();
+                        app.context_line = format!(
+                            "Done — {} tool call{} in {:.1}s",
+                            app.iteration_count,
+                            if app.iteration_count == 1 { "" } else { "s" },
+                            elapsed.as_secs_f64()
+                        );
+                    }
                 }
                 AgentEvent::Error(e) => {
                     app.messages.push(UiMessage::System(format!("Error: {e}")));
                     app.is_processing = false;
+                    app.context_line = format!("Error after {} tool calls", app.iteration_count);
                 }
                 AgentEvent::MessagesSync(msgs) => {
                     app.agent_messages = msgs;

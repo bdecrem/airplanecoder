@@ -3,8 +3,14 @@ use crate::types::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
+enum AuthMethod {
+    ApiKey(String),
+    OAuth(String),
+}
+
+#[derive(Clone)]
 pub struct AnthropicClient {
-    api_key: String,
+    auth: AuthMethod,
     client: reqwest::Client,
 }
 
@@ -67,13 +73,23 @@ struct AnthropicResponse {
 
 impl AnthropicClient {
     pub fn new() -> Result<Self> {
-        // Try .env file first, then environment
-        let api_key = load_env_file_key("ANTHROPIC_API_KEY")
+        // Try OAuth token first (sk-ant-oat01-...), then API key
+        let auth = if let Some(token) = load_env_file_key("ANTHROPIC_AUTH_TOKEN")
+            .or_else(|| std::env::var("ANTHROPIC_AUTH_TOKEN").ok())
+        {
+            AuthMethod::OAuth(token)
+        } else if let Some(key) = load_env_file_key("ANTHROPIC_API_KEY")
             .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-            .context("ANTHROPIC_API_KEY not set. Set it in .env or environment.")?;
+        {
+            AuthMethod::ApiKey(key)
+        } else {
+            anyhow::bail!(
+                "No Anthropic credentials found. Set ANTHROPIC_AUTH_TOKEN (OAuth) or ANTHROPIC_API_KEY in .env or environment."
+            );
+        };
 
         Ok(Self {
-            api_key,
+            auth,
             client: reqwest::Client::new(),
         })
     }
@@ -84,6 +100,7 @@ impl AnthropicClient {
         model: &str,
         messages: &[Message],
         tools: Option<&[ToolDef]>,
+        max_tokens: Option<u32>,
     ) -> Result<ChatResponse> {
         // Extract system prompt from messages
         let system = messages
@@ -107,18 +124,26 @@ impl AnthropicClient {
 
         let request = AnthropicRequest {
             model: model.to_string(),
-            max_tokens: 16384,
+            max_tokens: max_tokens.unwrap_or(16384),
             system,
             messages: anthropic_messages,
             tools: anthropic_tools,
         };
 
-        let resp = self
+        let mut req = self
             .client
             .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
+            .header("content-type", "application/json");
+
+        req = match &self.auth {
+            AuthMethod::ApiKey(key) => req.header("x-api-key", key),
+            AuthMethod::OAuth(token) => req
+                .header("Authorization", format!("Bearer {token}"))
+                .header("anthropic-beta", "oauth-2025-04-20"),
+        };
+
+        let resp = req
             .json(&request)
             .send()
             .await
@@ -280,5 +305,5 @@ fn load_env_file_key(key: &str) -> Option<String> {
 }
 
 pub fn is_anthropic_model(model: &str) -> bool {
-    model.starts_with("claude-")
+    model.starts_with("claude-") || model == "sonnet-fast"
 }

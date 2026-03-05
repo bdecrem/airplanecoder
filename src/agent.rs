@@ -30,14 +30,20 @@ impl LlmBackend {
         messages: &[Message],
         tools: Option<&[ToolDef]>,
     ) -> Result<ChatResponse> {
-        if anthropic::is_anthropic_model(model) {
+        // Resolve model aliases
+        let (actual_model, max_tokens) = match model {
+            "sonnet-fast" => ("claude-sonnet-4-6", Some(4096u32)),
+            other => (other, None),
+        };
+
+        if anthropic::is_anthropic_model(actual_model) {
             let client = self
                 .anthropic
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("ANTHROPIC_API_KEY not set. Add it to .env or environment."))?;
-            client.chat(model, messages, tools).await
+            client.chat(actual_model, messages, tools, max_tokens).await
         } else {
-            self.ollama.chat(model, messages, tools).await
+            self.ollama.chat(actual_model, messages, tools).await
         }
     }
 }

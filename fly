@@ -1,0 +1,10 @@
+#!/bin/bash
+# Airplane Coder launcher
+cd "$(dirname "$0")"
+
+case "${1:-}" in
+    check) cargo check ;;
+    test)  cargo test ;;
+    build) cargo build ;;
+    *)     cargo run -- "$@" ;;
+esac

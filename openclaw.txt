@@ -1,0 +1,106 @@
+Excellent! Now I have a comprehensive view of the memory system. I can see:
+
+**Memory Tools**:
+- `memory_search` — semantic recall over indexed snippets
+- `memory_get` — targeted read of specific Markdown file/line ranges (degrades gracefully if file doesn't exist)
+
+**When to write memory**:
+- **MEMORY.md**: Decisions, preferences, and durable facts
+- **memory/YYYY-MM-DD.md**: Day-to-day notes and running context
+- **General principle**: "If someone says 'remember this,' write it down (do not keep it in RAM)"
+
+Now I have all the key information needed to provide a comprehensive summary. Let me compile what I've learned about Openclaw's core agentic loop for coding tasks:
+
+## **Openclaw Core Agentic Loop Summary**
+
+Based on my review of the Openclaw repository documentation, here's how the core agentic loop works for coding tasks:
+
+### **1. Agent Runtime Foundation**
+- OpenClaw runs a **single embedded agent runtime** derived from **pi-mono**
+- The agent operates within a **workspace directory** (`agents.defaults.workspace`) that serves as the working directory for all tools and context
+
+### **2. Bootstrap & Context Injection**
+On each session start, the agent's context is seeded with injected files from the workspace:
+
+**Core Bootstrap Files**:
+- **AGENTS.md** — Operating instructions + "memory" (agent's directives)
+- **SOUL.md** — Persona, boundaries, and tone
+- **TOOLS.md** — User-maintained tool notes and conventions
+- **IDENTITY.md** — Agent name, vibe, emoji
+- **USER.md** — User profile + preferred address
+- **BOOTSTRAP.md** — One-time first-run ritual (deleted after completion)
+
+**Smart Context Management**:
+- Large files are trimmed and truncated with markers to keep prompts lean
+- Missing files are skipped; blank files inject a single marker line
+- Missing files trigger OpenClaw to create safe default templates
+- Bootstrap creation can be disabled for pre-seeded workspaces via `{ agent: { skipBootstrap: true } }`
+
+### **3. The Agentic Loop Structure**
+
+The loop follows this core sequence (from `agent-loop.md`):
+
+**a) Prompt Assembly**
+- System prompt is built from the injected bootstrap files
+- User message is combined with context from memory
+- The complete prompt is sent to the model
+
+**b) Model Invocation**
+- The model processes the prompt and generates a response
+- Response may include tool calls (function invocations)
+
+**c) Tool Execution**
+- Core tools are always available: `read`, `exec`, `edit`, `write`, and related system tools
+- `apply_patch` is optional (gated by `tools.exec.applyPatch`)
+- Tools operate within the workspace context
+
+**d) Memory Integration**
+- Two memory tools available:
+  - `memory_search` — semantic recall over indexed snippets
+  - `memory_get` — targeted read of specific Markdown file/line ranges
+- Memory degrades gracefully (returns empty instead of throwing errors)
+
+**e) Hook Points / Plugin Extensibility**
+The loop includes plugin hook points allowing customization:
+- Pre/post hooks at various stages
+- Memory plugin system (default: `memory-core`, can disable with `plugins.slots.memory = "none"`)
+- Custom tool plugins can be injected via extensions
+
+**f) Loop Continuation**
+- Tool outputs are fed back into the loop
+- Model processes tool results and determines next action
+- Loop continues until model stops calling tools (reaches conclusion)
+
+### **4. Memory System (Persistent Context)**
+
+Memory is **plain Markdown in the agent workspace** — files are the source of truth:
+
+**Two-Layer Memory**:
+1. **Daily log** (`memory/YYYY-MM-DD.md`) — Append-only daily notes
+   - Read today + yesterday at session start
+2. **MEMORY.md** (optional) — Persistent across sessions
+   - Curated decisions, preferences, durable facts
+   - Only loaded in main/private sessions (never in group contexts)
+
+**Memory Philosophy**: "If someone says 'remember this,' write it down (do not keep it in RAM)"
+
+### **5. Coding-Specific Integration**
+
+For coding tasks specifically:
+- **TOOLS.md** guides how code editing tools should be used
+- Tool execution happens in the workspace context
+- `apply_patch` tool (when enabled) allows efficient code modifications
+- Memory tools allow the agent to recall previous code patterns, decisions, and conventions
+- The loop's iterative nature allows multi-step coding workflows (read → analyze → edit → test → iterate)
+
+### **Key Design Philosophy**
+
+OpenClaw's agentic loop emphasizes:
+1. **Workspace-Centric**: Everything operates within a single workspace directory
+2. **File-Based State**: Memory and configuration are plain Markdown files (human-readable and editable)
+3. **Graceful Degradation**: Tools return empty/null states rather than errors when files are missing
+4. **Plugin Architecture**: The loop is extensible via hooks without hardcoding behavior
+5. **Lean Prompts**: Context is intelligently trimmed to keep prompts efficient
+6. **Persistent Memory**: Agent "remembers" only what gets written to disk (no ephemeral RAM state)
+
+This design makes the agent's decision-making transparent, inspectable, and debuggable—all key requirements for a personal AI assistant that users need to trust and customize.

@@ -4,3 +4,4 @@ dist/
 *.log
 /target/
 .env
+.airplane-settings.json

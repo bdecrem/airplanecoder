@@ -14,6 +14,7 @@ pub fn render(f: &mut Frame, app: &App) {
         .constraints([
             Constraint::Min(1),    // messages
             Constraint::Length(3), // input
+            Constraint::Length(1), // context bar
             Constraint::Length(1), // status bar
         ])
         .split(f.area());
@@ -24,7 +25,8 @@ pub fn render(f: &mut Frame, app: &App) {
         render_messages(f, chunks[0], app);
     }
     render_input(f, chunks[1], app);
-    render_status_bar(f, chunks[2], app);
+    render_context_bar(f, chunks[2], app);
+    render_status_bar(f, chunks[3], app);
 }
 
 fn render_splash(f: &mut Frame, area: Rect) {
@@ -163,6 +165,36 @@ fn render_input(f: &mut Frame, area: Rect, app: &App) {
             area.y + 1,
         ));
     }
+}
+
+fn render_context_bar(f: &mut Frame, area: Rect, app: &App) {
+    let content = if app.is_processing {
+        let elapsed = app.turn_start
+            .map(|s| format!("{:.1}s", s.elapsed().as_secs_f64()))
+            .unwrap_or_default();
+        let tool_info = app.last_tool
+            .as_deref()
+            .map(|t| format!(" | last: {t}"))
+            .unwrap_or_default();
+        format!(
+            " ⏳ working… iter {}/20{} | {}",
+            app.iteration_count, tool_info, elapsed
+        )
+    } else if !app.context_line.is_empty() {
+        format!(" {}", app.context_line)
+    } else {
+        " Ready".to_string()
+    };
+
+    let paragraph = Paragraph::new(Line::from(Span::styled(
+        content,
+        Style::default()
+            .fg(Color::Cyan)
+            .bg(Color::Black),
+    )))
+    .style(Style::default().bg(Color::Black));
+
+    f.render_widget(paragraph, area);
 }
 
 fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {

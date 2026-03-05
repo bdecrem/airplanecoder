@@ -199,6 +199,7 @@ fn model_routing_dispatches_correctly() {
 
     assert!(is_anthropic_model("claude-opus-4-6"));
     assert!(is_anthropic_model("claude-sonnet-4-6"));
+    assert!(is_anthropic_model("sonnet-fast"));
     assert!(!is_anthropic_model("qwen3.5:4b"));
     assert!(!is_anthropic_model("gemma3:12b"));
 }
