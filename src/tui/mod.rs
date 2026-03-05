@@ -10,9 +10,9 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::stdout;
 use tokio::sync::mpsc;
 
-use crate::agent::{self, AgentEvent, LlmBackend};
-use crate::anthropic;
-use crate::types::*;
+use airplane::agent::{self, AgentEvent, LlmBackend};
+use airplane::anthropic;
+use airplane::types::*;
 
 #[derive(Debug, Clone)]
 pub enum UiMessage {

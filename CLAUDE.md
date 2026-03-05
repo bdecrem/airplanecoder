@@ -18,10 +18,12 @@ Set model via env: `AIRPLANE_MODEL=qwen3.5:0.8b cargo run`
 
 ```
 src/
+├── lib.rs               # Public library crate (exposes modules for tests)
 ├── main.rs              # CLI (clap): --self-test, --repl flags, launches TUI
 ├── types.rs             # Message, ToolCall, ToolDef, ChatRequest/Response
 ├── ollama.rs            # OllamaClient: POST /api/chat, GET /api/tags
-├── agent.rs             # Agent loop: messages -> Ollama -> tool calls -> execute -> loop (max 20)
+├── anthropic.rs         # AnthropicClient: POST /v1/messages, .env key loading
+├── agent.rs             # Agent loop + LlmBackend dispatch (max 20 iterations)
 ├── self_test.rs         # --self-test: connectivity, parsing, tool smoke tests
 ├── tui/
 │   ├── mod.rs           # App state, async event loop (crossterm poll + agent channel)
@@ -34,6 +36,8 @@ src/
     ├── shell.rs         # shell — 120s timeout (for cargo build)
     ├── grep.rs          # grep — regex search, 100 result cap
     └── glob.rs          # glob — file patterns, 200 file cap
+tests/
+└── integration.rs       # Contract tests: serialization, tool validity, error handling
 ```
 
 ### How the Agent Loop Works
@@ -87,8 +91,46 @@ Default: `qwen3.5:4b`. Override with `AIRPLANE_MODEL` env var.
 
 ## Code Practices
 
-- Rust, single binary via `cargo build`
-- Async with tokio (reqwest needs it)
-- No external API keys or cloud services — everything local
-- Tools return strings (success message or error)
-- `cargo test` for unit tests, `--self-test` for integration tests
+### Module boundaries
+
+- One job per file. `ollama.rs` talks to Ollama. `anthropic.rs` talks to Anthropic. `agent.rs` runs the loop. Don't mix concerns.
+- Shared types live in `types.rs`. If a struct is used by more than one module, it goes there.
+- Tools are self-contained: each tool file owns its `definition()` and `execute()`. The only wiring point is `tools/mod.rs`.
+- TUI code never touches the network. Agent code never touches the terminal. They communicate through `mpsc` channels only.
+
+### Keep it small
+
+- No abstractions until you need them twice. We use enum dispatch for tools and LLM backends, not trait objects.
+- No config files, no plugin systems, no dependency injection. Env vars and `.env` for secrets.
+- If a new dependency adds more than it saves, don't add it.
+
+### Error handling
+
+- Tools return `Result<String>`. Errors become `"Error: ..."` strings sent to the model — the model can recover.
+- Use `anyhow` for error propagation. Use `.context()` to add useful messages at boundaries (file I/O, HTTP calls).
+- Never panic in tool code. Never `unwrap()` on user-provided data.
+
+### Testing
+
+**Every code change must pass `cargo test` before commit.** No exceptions.
+
+Three levels of testing:
+
+1. **Unit tests** (in each tool file) — fast, no external deps, test the tool logic
+2. **Integration tests** (`tests/integration.rs`) — test module contracts: serialization round-trips, tool definition validity, error handling, model routing
+3. **Self-test** (`--self-test`) — requires running Ollama, tests real connectivity and end-to-end tool execution
+
+When adding or changing:
+- **New tool**: add unit tests in the tool file + verify `all_tool_definitions_are_valid` still passes
+- **Type changes**: the serialization tests in `tests/integration.rs` catch breaking changes to the Ollama/Anthropic wire format
+- **New LLM backend**: add routing test to `model_routing_dispatches_correctly`
+
+### Serialization is the contract
+
+The JSON format between us and Ollama/Anthropic is the most fragile part of the system. The integration tests verify:
+- `ChatRequest` serializes correctly (field names, skip_serializing_if)
+- `ChatResponse` deserializes with tool_calls, without tool_calls, and with string-encoded arguments
+- Tool definitions round-trip through JSON
+- Every tool has valid schema (type: object, properties, required)
+
+If you change anything in `types.rs`, run `cargo test --test integration` immediately.

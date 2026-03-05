@@ -3,6 +3,11 @@ name = "airplane"
 version = "0.1.0"
 edition = "2021"
 description = "Offline coding agent powered by local Qwen models via Ollama"
+license = "MIT"
+
+[lib]
+name = "airplane"
+path = "src/lib.rs"
 
 [[bin]]
 name = "airplane"

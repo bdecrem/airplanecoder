@@ -1,6 +1,6 @@
 use anyhow::Result;
-use crate::ollama::OllamaClient;
-use crate::tools;
+use airplane::ollama::OllamaClient;
+use airplane::tools;
 use std::collections::HashMap;
 
 pub async fn run_self_test() -> Result<()> {
@@ -34,7 +34,7 @@ pub async fn run_self_test() -> Result<()> {
     // 3. Parse sample tool call
     print!("  Tool call parsing... ");
     let sample = r#"{"id":"1","type":"function","function":{"name":"read_file","arguments":{"path":"Cargo.toml"}}}"#;
-    match serde_json::from_str::<crate::types::ToolCall>(sample) {
+    match serde_json::from_str::<airplane::types::ToolCall>(sample) {
         Ok(tc) => println!("OK (parsed {} call)", tc.function.name),
         Err(e) => println!("FAIL: {e}"),
     }

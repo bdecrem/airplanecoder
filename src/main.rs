@@ -1,11 +1,7 @@
-mod agent;
-mod anthropic;
-mod ollama;
 mod self_test;
-mod tools;
 mod tui;
-mod types;
 
+use airplane::{agent, anthropic, types};
 use clap::Parser;
 
 #[derive(Parser)]
