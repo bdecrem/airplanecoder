@@ -1,0 +1,24 @@
+[package]
+name = "airplane"
+version = "0.1.0"
+edition = "2021"
+description = "Offline coding agent powered by local Qwen models via Ollama"
+
+[[bin]]
+name = "airplane"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ratatui = "0.29"
+crossterm = "0.28"
+clap = { version = "4", features = ["derive"] }
+glob = "0.3"
+anyhow = "1"
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3"

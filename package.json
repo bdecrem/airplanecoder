@@ -1,0 +1,26 @@
+{
+  "name": "airplanecoder",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Offline coding agent powered by local Qwen models",
+  "bin": {
+    "airplane": "./bin/airplane.ts"
+  },
+  "scripts": {
+    "start": "tsx src/ui.tsx",
+    "dev": "tsx watch src/ui.tsx"
+  },
+  "dependencies": {
+    "ink": "^5.2.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1",
+    "string-width": "^8.1.0",
+    "wrap-ansi": "^9.0.0",
+    "glob": "^11.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "@types/react": "^18.3.0",
+    "@types/node": "^22.0.0"
+  }
+}
