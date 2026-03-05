@@ -103,6 +103,7 @@ pub enum AgentEvent {
     AssistantText(String),
     ToolCall(String),       // formatted description
     ToolResult(String),     // tool output
+    Latency(u64),           // API call duration in ms
     Done,
     Error(String),
     MessagesSync(Vec<Message>), // sync agent messages back to TUI
@@ -132,7 +133,10 @@ pub async fn run_agent_turn(
     for _iteration in 0..MAX_ITERATIONS {
         trim_conversation(messages);
 
+        let api_start = std::time::Instant::now();
         let response = backend.chat(model, messages, Some(&tool_defs)).await?;
+        let latency_ms = api_start.elapsed().as_millis() as u64;
+        let _ = event_tx.send(AgentEvent::Latency(latency_ms));
         let msg = response.message;
 
         // If there's text content, send it
@@ -239,7 +243,7 @@ pub async fn run_agent_turn_repl(
             }
             AgentEvent::Done => {}
             AgentEvent::Error(e) => eprintln!("Error: {e}"),
-            AgentEvent::MessagesSync(_) => {} // only used by TUI
+            AgentEvent::Latency(_) | AgentEvent::MessagesSync(_) => {}
         }
     }
     Ok(())

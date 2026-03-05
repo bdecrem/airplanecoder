@@ -40,6 +40,7 @@ pub struct App {
     pub last_tool: Option<String>,
     pub turn_start: Option<std::time::Instant>,
     pub settings: Settings,
+    pub last_latency_ms: Option<u64>,
 }
 
 impl App {
@@ -59,6 +60,7 @@ impl App {
             last_tool: None,
             turn_start: None,
             settings,
+            last_latency_ms: None,
         }
     }
 
@@ -450,6 +452,9 @@ async fn run_event_loop(
                     app.messages.push(UiMessage::System(format!("Error: {e}")));
                     app.is_processing = false;
                     app.context_line = format!("Error after {} tool calls", app.iteration_count);
+                }
+                AgentEvent::Latency(ms) => {
+                    app.last_latency_ms = Some(ms);
                 }
                 AgentEvent::MessagesSync(msgs) => {
                     app.agent_messages = msgs;

@@ -199,21 +199,34 @@ fn render_context_bar(f: &mut Frame, area: Rect, app: &App) {
 
 fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
     let cwd = std::env::current_dir()
-        .map(|p| {
-            let home = dirs_home(&p);
-            home
-        })
+        .map(|p| dirs_home(&p))
         .unwrap_or_else(|_| "?".to_string());
 
-    let status = format!(" {} | {}", app.model, cwd);
+    let bg = Style::default().fg(Color::White).bg(Color::DarkGray);
 
-    let paragraph = Paragraph::new(Line::from(Span::styled(
-        status,
-        Style::default()
-            .fg(Color::White)
-            .bg(Color::DarkGray),
-    )))
-    .style(Style::default().bg(Color::DarkGray));
+    let left = format!(" {} | {}", app.model, cwd);
+
+    // Network indicator: green <3s, yellow 3-10s, red >10s
+    let (dot, dot_color, label) = match app.last_latency_ms {
+        Some(ms) if ms < 3000 => ("●", Color::Green, format!("{:.1}s", ms as f64 / 1000.0)),
+        Some(ms) if ms < 10000 => ("●", Color::Yellow, format!("{:.1}s", ms as f64 / 1000.0)),
+        Some(ms) => ("●", Color::Red, format!("{:.1}s", ms as f64 / 1000.0)),
+        None => ("○", Color::DarkGray, "—".to_string()),
+    };
+
+    let right = format!("{} {} ", label, dot);
+    let pad = (area.width as usize).saturating_sub(left.len() + right.len() - dot.len() + 1);
+
+    let line = Line::from(vec![
+        Span::styled(left, bg),
+        Span::styled(" ".repeat(pad), Style::default().bg(Color::DarkGray)),
+        Span::styled(label + " ", Style::default().fg(Color::DarkGray).bg(Color::DarkGray)),
+        Span::styled(dot, Style::default().fg(dot_color).bg(Color::DarkGray)),
+        Span::styled(" ", Style::default().bg(Color::DarkGray)),
+    ]);
+
+    let paragraph = Paragraph::new(line)
+        .style(Style::default().bg(Color::DarkGray));
 
     f.render_widget(paragraph, area);
 }
