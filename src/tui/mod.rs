@@ -10,8 +10,8 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::stdout;
 use tokio::sync::mpsc;
 
-use crate::agent::{self, AgentEvent};
-use crate::ollama::OllamaClient;
+use crate::agent::{self, AgentEvent, LlmBackend};
+use crate::anthropic;
 use crate::types::*;
 
 #[derive(Debug, Clone)]
@@ -73,7 +73,10 @@ impl App {
                 } else {
                     self.messages.push(UiMessage::Info(format!("Current model: {}", self.model)));
                     self.messages.push(UiMessage::Info(
-                        "Available: qwen3.5:0.8b, qwen3.5:2b, qwen3.5:4b".into(),
+                        "Local: qwen3.5:0.8b, qwen3.5:2b, qwen3.5:4b, qwen3.5:8b".into(),
+                    ));
+                    self.messages.push(UiMessage::Info(
+                        "Cloud: claude-opus-4-6, claude-sonnet-4-6".into(),
                     ));
                 }
                 None
@@ -100,11 +103,18 @@ enum SlashAction {}
 
 pub async fn run_tui() -> Result<()> {
     let model = std::env::var("AIRPLANE_MODEL").unwrap_or_else(|_| "qwen3.5:4b".to_string());
-    let mut app = App::new(model);
+    let mut app = App::new(model.clone());
 
-    // Check Ollama
-    let client = OllamaClient::new();
-    if !client.is_available().await {
+    let backend = LlmBackend::new();
+
+    // Check connectivity for the default model
+    if anthropic::is_anthropic_model(&model) {
+        if backend.anthropic.is_none() {
+            app.messages.push(UiMessage::System(
+                "Warning: ANTHROPIC_API_KEY not set. Add it to .env or environment.".into(),
+            ));
+        }
+    } else if !backend.ollama.is_available().await {
         app.messages.push(UiMessage::System(
             "Warning: Ollama is not running. Start it with: ollama serve".into(),
         ));
@@ -113,12 +123,12 @@ pub async fn run_tui() -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout());
-    let mut terminal = Terminal::new(backend)?;
+    let term_backend = CrosstermBackend::new(stdout());
+    let mut terminal = Terminal::new(term_backend)?;
 
     let (agent_tx, mut agent_rx) = mpsc::unbounded_channel::<AgentEvent>();
 
-    let result = run_event_loop(&mut terminal, &mut app, &client, &agent_tx, &mut agent_rx).await;
+    let result = run_event_loop(&mut terminal, &mut app, &backend, &agent_tx, &mut agent_rx).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -130,7 +140,7 @@ pub async fn run_tui() -> Result<()> {
 async fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     app: &mut App,
-    client: &OllamaClient,
+    backend: &LlmBackend,
     agent_tx: &mpsc::UnboundedSender<AgentEvent>,
     agent_rx: &mut mpsc::UnboundedReceiver<AgentEvent>,
 ) -> Result<()> {
@@ -224,14 +234,14 @@ async fn run_event_loop(
                                 });
 
                                 // Spawn agent task
-                                let client_clone = client.clone();
+                                let backend_clone = backend.clone();
                                 let model_clone = app.model.clone();
                                 let mut messages_clone = app.agent_messages.clone();
                                 let tx = agent_tx.clone();
 
                                 agent_handle = Some(tokio::spawn(async move {
                                     let _ = agent::run_agent_turn(
-                                        &client_clone,
+                                        &backend_clone,
                                         &model_clone,
                                         &mut messages_clone,
                                         &tx,

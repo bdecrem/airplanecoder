@@ -1,4 +1,5 @@
 mod agent;
+mod anthropic;
 mod ollama;
 mod self_test;
 mod tools;
@@ -8,7 +9,7 @@ mod types;
 use clap::Parser;
 
 #[derive(Parser)]
-#[command(name = "airplane", about = "Offline coding agent powered by local Qwen models")]
+#[command(name = "airplane", about = "Offline coding agent powered by local Qwen models + Claude API")]
 struct Cli {
     /// Run self-test (check Ollama, tools, etc.)
     #[arg(long)]
@@ -36,13 +37,13 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_repl() -> anyhow::Result<()> {
     let model = std::env::var("AIRPLANE_MODEL").unwrap_or_else(|_| "qwen3.5:4b".to_string());
-    let client = ollama::OllamaClient::new();
+    let backend = agent::LlmBackend::new();
 
     println!("Airplane Coder — REPL mode");
     println!("Model: {model}");
     println!("Type your message (Ctrl+D to quit)\n");
 
-    if !client.is_available().await {
+    if !anthropic::is_anthropic_model(&model) && !backend.ollama.is_available().await {
         eprintln!("Warning: Ollama is not running. Start it with: ollama serve");
     }
 
@@ -70,7 +71,7 @@ async fn run_repl() -> anyhow::Result<()> {
             tool_call_id: None,
         });
 
-        agent::run_agent_turn_repl(&client, &model, &mut messages).await?;
+        agent::run_agent_turn_repl(&backend, &model, &mut messages).await?;
     }
 
     Ok(())

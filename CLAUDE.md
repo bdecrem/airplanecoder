@@ -77,9 +77,10 @@ Default: `qwen3.5:4b`. Override with `AIRPLANE_MODEL` env var.
 
 | Model | Size | Use Case |
 |-------|------|----------|
-| `qwen3.5:0.8b` | ~0.5GB | Tiny, fast, edge device |
-| `qwen3.5:2b` | ~1.5GB | Lightweight, good balance |
-| `qwen3.5:4b` | ~2.5GB | Strongest small model |
+| `qwen3.5:0.8b` | ~0.5GB | Tiny, fast, testing |
+| `qwen3.5:2b` | ~1.5GB | Lightweight |
+| `qwen3.5:4b` | ~2.5GB | Good balance (default) |
+| `qwen3.5:8b` | ~5GB | Best quality |
 
 ## Code Practices
 

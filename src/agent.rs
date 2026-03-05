@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crate::anthropic::{self, AnthropicClient};
 use crate::ollama::OllamaClient;
 use crate::tools;
 use crate::types::*;
@@ -8,9 +9,42 @@ const MAX_ITERATIONS: usize = 20;
 const MAX_TOOL_RESULT_CHARS: usize = 2000;
 const MAX_CONTEXT_MESSAGES: usize = 40; // keep last N messages when trimming
 
+/// Holds both LLM backends
+#[derive(Clone)]
+pub struct LlmBackend {
+    pub ollama: OllamaClient,
+    pub anthropic: Option<AnthropicClient>,
+}
+
+impl LlmBackend {
+    pub fn new() -> Self {
+        Self {
+            ollama: OllamaClient::new(),
+            anthropic: AnthropicClient::new().ok(),
+        }
+    }
+
+    async fn chat(
+        &self,
+        model: &str,
+        messages: &[Message],
+        tools: Option<&[ToolDef]>,
+    ) -> Result<ChatResponse> {
+        if anthropic::is_anthropic_model(model) {
+            let client = self
+                .anthropic
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("ANTHROPIC_API_KEY not set. Add it to .env or environment."))?;
+            client.chat(model, messages, tools).await
+        } else {
+            self.ollama.chat(model, messages, tools).await
+        }
+    }
+}
+
 fn system_prompt() -> String {
     let mut prompt = String::from(
-        "You are Airplane Coder, a local coding assistant that runs entirely on-device.\n\
+        "You are Airplane Coder, a coding assistant.\n\
          You help users with software engineering tasks: reading code, writing code, debugging, refactoring, running tests, and more.\n\n\
          Guidelines:\n\
          - Read files before modifying them\n\
@@ -69,7 +103,7 @@ pub enum AgentEvent {
 }
 
 pub async fn run_agent_turn(
-    client: &OllamaClient,
+    backend: &LlmBackend,
     model: &str,
     messages: &mut Vec<Message>,
     event_tx: &tokio::sync::mpsc::UnboundedSender<AgentEvent>,
@@ -92,7 +126,7 @@ pub async fn run_agent_turn(
     for _iteration in 0..MAX_ITERATIONS {
         trim_conversation(messages);
 
-        let response = client.chat(model, messages, Some(&tool_defs)).await?;
+        let response = backend.chat(model, messages, Some(&tool_defs)).await?;
         let msg = response.message;
 
         // If there's text content, send it
@@ -181,12 +215,12 @@ fn format_tool_call(name: &str, args: &HashMap<String, serde_json::Value>) -> St
 
 /// Simplified version for REPL mode (no TUI)
 pub async fn run_agent_turn_repl(
-    client: &OllamaClient,
+    backend: &LlmBackend,
     model: &str,
     messages: &mut Vec<Message>,
 ) -> Result<()> {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    run_agent_turn(client, model, messages, &tx).await?;
+    run_agent_turn(backend, model, messages, &tx).await?;
     drop(tx);
 
     while let Some(event) = rx.recv().await {
