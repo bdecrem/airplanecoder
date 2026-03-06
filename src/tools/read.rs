@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use crate::types::{ToolDef, FunctionDef};
 use std::collections::HashMap;
+use std::path::Path;
 
 pub fn definition() -> ToolDef {
     ToolDef {
@@ -30,14 +31,15 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub async fn execute(args: &HashMap<String, serde_json::Value>) -> Result<String> {
-    let path = super::get_str(args, "path").context("Missing 'path' argument")?;
+pub async fn execute(args: &HashMap<String, serde_json::Value>, root: &Path) -> Result<String> {
+    let path_str = super::get_str(args, "path").context("Missing 'path' argument")?;
+    let path = super::resolve_path(root, path_str);
     let offset = super::get_u64(args, "offset").unwrap_or(1).max(1) as usize;
     let limit = super::get_u64(args, "limit").map(|l| l as usize);
 
-    let content = tokio::fs::read_to_string(path)
+    let content = tokio::fs::read_to_string(&path)
         .await
-        .with_context(|| format!("Cannot read file: {path}"))?;
+        .with_context(|| format!("Cannot read file: {}", path.display()))?;
 
     let lines: Vec<&str> = content.lines().collect();
     let total = lines.len();
@@ -54,7 +56,7 @@ pub async fn execute(args: &HashMap<String, serde_json::Value>) -> Result<String
     }
 
     if output.is_empty() {
-        Ok(format!("File {path} is empty ({total} lines total)"))
+        Ok(format!("File {} is empty ({total} lines total)", path.display()))
     } else {
         Ok(output)
     }
@@ -74,7 +76,8 @@ mod tests {
 
         let mut args = HashMap::new();
         args.insert("path".into(), serde_json::json!(tmp.path().to_str().unwrap()));
-        let result = execute(&args).await.unwrap();
+        let root = Path::new("/");
+        let result = execute(&args, root).await.unwrap();
         assert!(result.contains("line one"));
         assert!(result.contains("line three"));
     }
@@ -90,7 +93,8 @@ mod tests {
         args.insert("path".into(), serde_json::json!(tmp.path().to_str().unwrap()));
         args.insert("offset".into(), serde_json::json!(3));
         args.insert("limit".into(), serde_json::json!(2));
-        let result = execute(&args).await.unwrap();
+        let root = Path::new("/");
+        let result = execute(&args, root).await.unwrap();
         assert!(result.contains("line 3"));
         assert!(result.contains("line 4"));
         assert!(!result.contains("line 5"));

@@ -67,7 +67,8 @@ async fn run_repl() -> anyhow::Result<()> {
             tool_call_id: None,
         });
 
-        agent::run_agent_turn_repl(&backend, &model, &mut messages).await?;
+        let root = std::env::current_dir()?;
+        agent::run_agent_turn_repl(&backend, &model, &mut messages, &root).await?;
     }
 
     Ok(())

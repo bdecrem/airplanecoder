@@ -184,8 +184,9 @@ pub async fn run_tui() -> Result<()> {
     terminal.clear()?;
 
     let (agent_tx, mut agent_rx) = mpsc::unbounded_channel::<AgentEvent>();
+    let root = std::env::current_dir()?;
 
-    let result = run_event_loop(&mut terminal, &mut app, &backend, &agent_tx, &mut agent_rx).await;
+    let result = run_event_loop(&mut terminal, &mut app, &backend, &agent_tx, &mut agent_rx, &root).await;
 
     // Save last-used model
     app.settings.last_model = Some(app.model.clone());
@@ -206,6 +207,7 @@ async fn run_event_loop(
     backend: &LlmBackend,
     agent_tx: &mpsc::UnboundedSender<AgentEvent>,
     agent_rx: &mut mpsc::UnboundedReceiver<AgentEvent>,
+    root: &std::path::Path,
 ) -> Result<()> {
     let mut agent_handle: Option<tokio::task::JoinHandle<()>> = None;
     let mut last_esc: Option<std::time::Instant> = None;
@@ -259,6 +261,7 @@ async fn run_event_loop(
                                 handle.abort();
                             }
                             app.is_processing = false;
+                            agent::trim_incomplete_turn(&mut app.agent_messages);
                             app.messages.push(UiMessage::System("Cancelled.".into()));
                         } else {
                             app.should_quit = true;
@@ -275,6 +278,7 @@ async fn run_event_loop(
                                 handle.abort();
                             }
                             app.is_processing = false;
+                            agent::trim_incomplete_turn(&mut app.agent_messages);
                             app.messages.push(UiMessage::System("Cancelled.".into()));
                         } else {
                             // Double-tap Esc to quit when idle (within 500ms)
@@ -359,6 +363,7 @@ async fn run_event_loop(
                                 let model_clone = app.model.clone();
                                 let mut messages_clone = app.agent_messages.clone();
                                 let tx = agent_tx.clone();
+                                let root = root.to_owned();
 
                                 agent_handle = Some(tokio::spawn(async move {
                                     let _ = agent::run_agent_turn(
@@ -366,6 +371,7 @@ async fn run_event_loop(
                                         &model_clone,
                                         &mut messages_clone,
                                         &tx,
+                                        &root,
                                     )
                                     .await
                                     .map_err(|e| {

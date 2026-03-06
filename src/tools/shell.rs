@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use crate::types::{ToolDef, FunctionDef};
 use std::collections::HashMap;
+use std::path::Path;
 use tokio::process::Command;
 
 pub fn definition() -> ToolDef {
@@ -27,11 +28,11 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub async fn execute(args: &HashMap<String, serde_json::Value>) -> Result<String> {
+pub async fn execute(args: &HashMap<String, serde_json::Value>, root: &Path) -> Result<String> {
     let command = super::get_str(args, "command").context("Missing 'command' argument")?;
     let cwd = super::get_str(args, "cwd")
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| std::env::current_dir().unwrap().to_string_lossy().to_string());
+        .map(|s| super::resolve_path(root, s))
+        .unwrap_or_else(|| root.to_owned());
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(120),
@@ -75,7 +76,8 @@ mod tests {
     async fn test_shell_echo() {
         let mut args = HashMap::new();
         args.insert("command".into(), serde_json::json!("echo hello"));
-        let result = execute(&args).await.unwrap();
+        let root = Path::new("/");
+        let result = execute(&args, root).await.unwrap();
         assert_eq!(result.trim(), "hello");
     }
 
@@ -85,7 +87,8 @@ mod tests {
         let mut args = HashMap::new();
         args.insert("command".into(), serde_json::json!("pwd"));
         args.insert("cwd".into(), serde_json::json!(dir.path().to_str().unwrap()));
-        let result = execute(&args).await.unwrap();
+        let root = Path::new("/");
+        let result = execute(&args, root).await.unwrap();
         // On macOS /tmp is /private/tmp, so use canonical paths
         let expected = std::fs::canonicalize(dir.path()).unwrap();
         let actual = std::fs::canonicalize(result.trim()).unwrap();

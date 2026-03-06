@@ -176,8 +176,11 @@ fn convert_messages(messages: &[Message]) -> Vec<AnthropicMessage> {
 
         if msg.role == "tool" {
             // Tool results become tool_result blocks in the last user message
+            let tool_use_id = msg.tool_call_id.clone()
+                .filter(|id| !id.is_empty())
+                .unwrap_or_else(|| format!("tool_{}", result.len()));
             let block = ContentBlock::ToolResult {
-                tool_use_id: msg.tool_call_id.clone().unwrap_or_default(),
+                tool_use_id,
                 content: msg.content.clone(),
             };
 

@@ -89,12 +89,46 @@ fn trim_conversation(messages: &mut Vec<Message>) {
     if messages.len() <= MAX_CONTEXT_MESSAGES + 1 {
         return;
     }
-    let keep_from = messages.len() - MAX_CONTEXT_MESSAGES;
+    let mut keep_from = messages.len() - MAX_CONTEXT_MESSAGES;
+    // Advance to a "user" message boundary. Anthropic requires:
+    // - First non-system message must be role "user"
+    // - Each tool_result must follow its assistant tool_use
+    // So we skip until we land on a plain "user" message.
+    while keep_from < messages.len() && messages[keep_from].role != "user" {
+        keep_from += 1;
+    }
+    // If the "user" message has role "user" but is actually tool_results
+    // (tool_call_id is set), keep advancing — those are orphaned too.
+    while keep_from < messages.len()
+        && messages[keep_from].role == "user"
+        && messages[keep_from].tool_call_id.is_some()
+    {
+        keep_from += 1;
+        // Skip past non-user messages that follow
+        while keep_from < messages.len() && messages[keep_from].role != "user" {
+            keep_from += 1;
+        }
+    }
     let system = messages[0].clone();
     let kept: Vec<Message> = messages[keep_from..].to_vec();
     messages.clear();
     messages.push(system);
     messages.extend(kept);
+}
+
+/// Remove any incomplete turn from the end of the conversation.
+/// Called after cancellation to ensure the message list is in a valid state
+/// for the next API call (ends with a complete user or assistant turn).
+pub fn trim_incomplete_turn(messages: &mut Vec<Message>) {
+    // Pop trailing tool results
+    while messages.last().is_some_and(|m| m.role == "tool") {
+        messages.pop();
+    }
+    // If the last message is an assistant with tool_calls (whose results we
+    // just removed or that never completed), remove it too.
+    if messages.last().is_some_and(|m| m.role == "assistant" && m.tool_calls.is_some()) {
+        messages.pop();
+    }
 }
 
 /// Events sent from agent to TUI
@@ -114,6 +148,7 @@ pub async fn run_agent_turn(
     model: &str,
     messages: &mut Vec<Message>,
     event_tx: &tokio::sync::mpsc::UnboundedSender<AgentEvent>,
+    root: &std::path::Path,
 ) -> Result<()> {
     // Ensure system message is first
     if messages.is_empty() || messages[0].role != "system" {
@@ -176,7 +211,7 @@ pub async fn run_agent_turn(
             let _ = event_tx.send(AgentEvent::ToolCall(display));
 
             // Execute
-            let result = tools::execute_tool(name, &args).await;
+            let result = tools::execute_tool(name, &args, root).await;
             let truncated = truncate_tool_result(&result);
 
             let _ = event_tx.send(AgentEvent::ToolResult(truncated.clone()));
@@ -228,9 +263,10 @@ pub async fn run_agent_turn_repl(
     backend: &LlmBackend,
     model: &str,
     messages: &mut Vec<Message>,
+    root: &std::path::Path,
 ) -> Result<()> {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    run_agent_turn(backend, model, messages, &tx).await?;
+    run_agent_turn(backend, model, messages, &tx, root).await?;
     drop(tx);
 
     while let Some(event) = rx.recv().await {

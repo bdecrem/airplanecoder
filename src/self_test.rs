@@ -49,10 +49,11 @@ pub async fn run_self_test() -> Result<()> {
 
     // 5. Read own Cargo.toml
     print!("  read_file(Cargo.toml)... ");
+    let root = std::env::current_dir()?;
     let mut args = HashMap::new();
     args.insert("path".into(), serde_json::json!("Cargo.toml"));
     args.insert("limit".into(), serde_json::json!(5));
-    let result = tools::execute_tool("read_file", &args).await;
+    let result = tools::execute_tool("read_file", &args, &root).await;
     if result.contains("[package]") {
         println!("OK");
     } else {
@@ -64,7 +65,7 @@ pub async fn run_self_test() -> Result<()> {
     print!("  shell(echo hello)... ");
     let mut args = HashMap::new();
     args.insert("command".into(), serde_json::json!("echo hello"));
-    let result = tools::execute_tool("shell", &args).await;
+    let result = tools::execute_tool("shell", &args, &root).await;
     if result.trim() == "hello" {
         println!("OK");
     } else {
@@ -75,7 +76,7 @@ pub async fn run_self_test() -> Result<()> {
     print!("  glob(src/**/*.rs)... ");
     let mut args = HashMap::new();
     args.insert("pattern".into(), serde_json::json!("src/**/*.rs"));
-    let result = tools::execute_tool("glob", &args).await;
+    let result = tools::execute_tool("glob", &args, &root).await;
     if result.contains("main.rs") {
         println!("OK");
     } else {

@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use crate::types::{ToolDef, FunctionDef};
 use std::collections::HashMap;
+use std::path::Path;
 
 pub fn definition() -> ToolDef {
     ToolDef {
@@ -26,11 +27,11 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub async fn execute(args: &HashMap<String, serde_json::Value>) -> Result<String> {
+pub async fn execute(args: &HashMap<String, serde_json::Value>, root: &Path) -> Result<String> {
     let pattern = super::get_str(args, "pattern").context("Missing 'pattern' argument")?;
     let base = super::get_str(args, "path")
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| std::env::current_dir().unwrap().to_string_lossy().to_string());
+        .map(|p| super::resolve_path(root, p).to_string_lossy().to_string())
+        .unwrap_or_else(|| root.to_string_lossy().to_string());
 
     let full_pattern = if pattern.starts_with('/') {
         pattern.to_string()
@@ -85,7 +86,8 @@ mod tests {
         let mut args = HashMap::new();
         args.insert("pattern".into(), serde_json::json!("*.txt"));
         args.insert("path".into(), serde_json::json!(dir.path().to_str().unwrap()));
-        let result = execute(&args).await.unwrap();
+        let root = Path::new("/");
+        let result = execute(&args, root).await.unwrap();
         assert!(result.contains("a.txt"));
         assert!(result.contains("b.txt"));
         assert!(!result.contains("c.rs"));

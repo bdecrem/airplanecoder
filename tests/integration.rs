@@ -153,29 +153,32 @@ fn tool_definitions_serialize_for_ollama() {
 async fn tools_return_errors_not_panics() {
     use airplane::tools::execute_tool;
     use std::collections::HashMap;
+    use std::path::Path;
+
+    let root = Path::new("/");
 
     // Unknown tool
-    let result = execute_tool("nonexistent", &HashMap::new()).await;
+    let result = execute_tool("nonexistent", &HashMap::new(), root).await;
     assert!(result.starts_with("Error:"));
 
     // read_file with no args
-    let result = execute_tool("read_file", &HashMap::new()).await;
+    let result = execute_tool("read_file", &HashMap::new(), root).await;
     assert!(result.starts_with("Error:"));
 
     // read_file with nonexistent path
     let mut args = HashMap::new();
     args.insert("path".into(), serde_json::json!("/tmp/airplane_nonexistent_file_12345"));
-    let result = execute_tool("read_file", &args).await;
+    let result = execute_tool("read_file", &args, root).await;
     assert!(result.starts_with("Error:"));
 
     // edit_file with missing args
-    let result = execute_tool("edit_file", &HashMap::new()).await;
+    let result = execute_tool("edit_file", &HashMap::new(), root).await;
     assert!(result.starts_with("Error:"));
 
     // write_file with missing content
     let mut args = HashMap::new();
     args.insert("path".into(), serde_json::json!("/tmp/test"));
-    let result = execute_tool("write_file", &args).await;
+    let result = execute_tool("write_file", &args, root).await;
     assert!(result.starts_with("Error:"));
 }
 
@@ -183,11 +186,14 @@ async fn tools_return_errors_not_panics() {
 async fn shell_tool_timeout_works() {
     use airplane::tools::execute_tool;
     use std::collections::HashMap;
+    use std::path::Path;
+
+    let root = Path::new("/");
 
     // A fast command should succeed
     let mut args = HashMap::new();
     args.insert("command".into(), serde_json::json!("echo ok"));
-    let result = execute_tool("shell", &args).await;
+    let result = execute_tool("shell", &args, root).await;
     assert_eq!(result.trim(), "ok");
 }
 

@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use crate::types::{ToolDef, FunctionDef};
 use std::collections::HashMap;
+use std::path::Path;
 
 pub fn definition() -> ToolDef {
     ToolDef {
@@ -30,29 +31,30 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub async fn execute(args: &HashMap<String, serde_json::Value>) -> Result<String> {
-    let path = super::get_str(args, "path").context("Missing 'path' argument")?;
+pub async fn execute(args: &HashMap<String, serde_json::Value>, root: &Path) -> Result<String> {
+    let path_str = super::get_str(args, "path").context("Missing 'path' argument")?;
+    let path = super::resolve_path(root, path_str);
     let old_string = super::get_str(args, "old_string").context("Missing 'old_string' argument")?;
     let new_string = super::get_str(args, "new_string").context("Missing 'new_string' argument")?;
 
-    let content = tokio::fs::read_to_string(path)
+    let content = tokio::fs::read_to_string(&path)
         .await
-        .with_context(|| format!("Cannot read file: {path}"))?;
+        .with_context(|| format!("Cannot read file: {}", path.display()))?;
 
     let count = content.matches(old_string).count();
     if count == 0 {
-        anyhow::bail!("old_string not found in {path}");
+        anyhow::bail!("old_string not found in {}", path.display());
     }
     if count > 1 {
-        anyhow::bail!("old_string matches {count} times in {path} (must match exactly once)");
+        anyhow::bail!("old_string matches {count} times in {} (must match exactly once)", path.display());
     }
 
     let new_content = content.replacen(old_string, new_string, 1);
-    tokio::fs::write(path, &new_content)
+    tokio::fs::write(&path, &new_content)
         .await
-        .with_context(|| format!("Cannot write file: {path}"))?;
+        .with_context(|| format!("Cannot write file: {}", path.display()))?;
 
-    Ok(format!("Edited {path} (replaced 1 occurrence)"))
+    Ok(format!("Edited {} (replaced 1 occurrence)", path.display()))
 }
 
 #[cfg(test)]
@@ -69,7 +71,8 @@ mod tests {
         args.insert("path".into(), serde_json::json!(tmp.path().to_str().unwrap()));
         args.insert("old_string".into(), serde_json::json!("world"));
         args.insert("new_string".into(), serde_json::json!("rust"));
-        let result = execute(&args).await.unwrap();
+        let root = Path::new("/");
+        let result = execute(&args, root).await.unwrap();
         assert!(result.contains("replaced 1"));
 
         let content = std::fs::read_to_string(tmp.path()).unwrap();
@@ -85,7 +88,8 @@ mod tests {
         args.insert("path".into(), serde_json::json!(tmp.path().to_str().unwrap()));
         args.insert("old_string".into(), serde_json::json!("xyz"));
         args.insert("new_string".into(), serde_json::json!("abc"));
-        let result = execute(&args).await;
+        let root = Path::new("/");
+        let result = execute(&args, root).await;
         assert!(result.is_err());
     }
 
@@ -98,7 +102,8 @@ mod tests {
         args.insert("path".into(), serde_json::json!(tmp.path().to_str().unwrap()));
         args.insert("old_string".into(), serde_json::json!("aaa"));
         args.insert("new_string".into(), serde_json::json!("bbb"));
-        let result = execute(&args).await;
+        let root = Path::new("/");
+        let result = execute(&args, root).await;
         assert!(result.is_err());
     }
 }

@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use crate::types::{ToolDef, FunctionDef};
 use std::collections::HashMap;
+use std::path::Path;
 use tokio::process::Command;
 
 pub fn definition() -> ToolDef {
@@ -31,9 +32,12 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub async fn execute(args: &HashMap<String, serde_json::Value>) -> Result<String> {
+pub async fn execute(args: &HashMap<String, serde_json::Value>, root: &Path) -> Result<String> {
     let pattern = super::get_str(args, "pattern").context("Missing 'pattern' argument")?;
-    let path = super::get_str(args, "path").unwrap_or(".");
+    let path = super::get_str(args, "path")
+        .map(|p| super::resolve_path(root, p))
+        .unwrap_or_else(|| root.to_owned());
+    let path = path.to_string_lossy();
     let include = super::get_str(args, "include");
 
     let mut cmd = Command::new("grep");
@@ -48,7 +52,7 @@ pub async fn execute(args: &HashMap<String, serde_json::Value>) -> Result<String
         cmd.arg(format!("--include={inc}"));
     }
 
-    cmd.arg(pattern).arg(path);
+    cmd.arg(pattern).arg(&*path);
 
     let output = cmd.output().await.context("Failed to run grep")?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -86,7 +90,8 @@ mod tests {
         let mut args = HashMap::new();
         args.insert("pattern".into(), serde_json::json!("hello"));
         args.insert("path".into(), serde_json::json!(dir.path().to_str().unwrap()));
-        let result = execute(&args).await.unwrap();
+        let root = Path::new("/");
+        let result = execute(&args, root).await.unwrap();
         assert!(result.contains("hello world"));
         assert!(result.contains("hello rust"));
         assert!(!result.contains("goodbye"));
