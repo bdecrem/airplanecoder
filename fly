@@ -1,10 +1,10 @@
 #!/bin/bash
-# Airplane Coder launcher
-cd "$(dirname "$0")"
+# Airplane Coder launcher — runs in your current directory
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0")")" && pwd)"
 
 case "${1:-}" in
-    check) cargo check ;;
-    test)  cargo test ;;
-    build) cargo build ;;
-    *)     cargo run -- "$@" ;;
+    check) cd "$SCRIPT_DIR" && cargo check ;;
+    test)  cd "$SCRIPT_DIR" && cargo test ;;
+    build) cd "$SCRIPT_DIR" && cargo build ;;
+    *)     cargo run --manifest-path "$SCRIPT_DIR/Cargo.toml" -- "$@" ;;
 esac

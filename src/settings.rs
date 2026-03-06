@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-const SETTINGS_FILE: &str = ".airplane-settings.json";
+const SETTINGS_DIR: &str = ".airplane";
+const SETTINGS_FILE: &str = "settings.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ResumeModel {
@@ -35,9 +36,10 @@ impl Default for Settings {
 }
 
 fn settings_path() -> PathBuf {
-    std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(SETTINGS_FILE)
+    let dir = std::env::var("HOME")
+        .map(|h| PathBuf::from(h).join(SETTINGS_DIR))
+        .unwrap_or_else(|_| PathBuf::from("."));
+    dir.join(SETTINGS_FILE)
 }
 
 impl Settings {
@@ -51,6 +53,9 @@ impl Settings {
 
     pub fn save(&self) {
         let path = settings_path();
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
         if let Ok(json) = serde_json::to_string_pretty(self) {
             let _ = std::fs::write(path, json);
         }

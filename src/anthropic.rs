@@ -289,10 +289,24 @@ fn convert_response(resp: AnthropicResponse) -> ChatResponse {
     }
 }
 
-/// Load a key from .env file in current directory
+/// Load a key from .env files, checking multiple locations:
+/// 1. ~/.airplane/.env  (persistent user config)
+/// 2. ./.env            (current working directory, for dev convenience)
 fn load_env_file_key(key: &str) -> Option<String> {
-    let env_path = std::env::current_dir().ok()?.join(".env");
-    let content = std::fs::read_to_string(env_path).ok()?;
+    let paths = [
+        std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".airplane").join(".env")),
+        std::env::current_dir().ok().map(|d| d.join(".env")),
+    ];
+    for path in paths.into_iter().flatten() {
+        if let Some(val) = read_env_key(&path, key) {
+            return Some(val);
+        }
+    }
+    None
+}
+
+fn read_env_key(path: &std::path::Path, key: &str) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
     for line in content.lines() {
         let line = line.trim();
         if line.starts_with('#') || line.is_empty() {
